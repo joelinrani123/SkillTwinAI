@@ -114,7 +114,7 @@ export default function LoginPage({ onLogin, onBack }) {
         {mode === 'signup' && (
           <div style={{ width: '100%', maxWidth: 440, marginBottom: 16 }}>
             <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              I am joining as a…
+              Select your role to continue
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
               {[
