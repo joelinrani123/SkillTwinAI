@@ -13,25 +13,7 @@ export default defineConfig({
     },
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          // Keep React AND Clerk together in the same vendor chunk
-          // so Clerk can always find React's useState/useEffect
-          if (id.includes('node_modules')) {
-            if (
-              id.includes('react') ||
-              id.includes('react-dom') ||
-              id.includes('@clerk')
-            ) {
-              return 'react-vendor';
-            }
-            return 'vendor';
-          }
-        },
-      },
-    },
-    chunkSizeWarningLimit: 1500,
+    chunkSizeWarningLimit: 2000,
     minify: 'esbuild',
     target: 'esnext',
   },
