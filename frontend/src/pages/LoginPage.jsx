@@ -65,27 +65,83 @@ export default function LoginPage({ onLogin, onBack }) {
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState('');
   const [tIdx,        setTIdx]        = useState(0);
-  const [showForgot,  setShowForgot]  = useState(false);
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotState, setForgotState] = useState('idle'); // idle | loading | sent | error
-  const [forgotMsg,   setForgotMsg]   = useState('');
+
+  // Security question for signup
+  const [securityQuestions, setSecurityQuestions] = useState([]);
+  const [securityQuestion,  setSecurityQuestion]  = useState('');
+  const [securityAnswer,    setSecurityAnswer]    = useState('');
+
+  // Password reset modal — 3 steps: email | answer | newpw | done
+  const [showReset,    setShowReset]    = useState(false);
+  const [resetStep,    setResetStep]    = useState('email'); // email | answer | newpw | done
+  const [resetEmail,   setResetEmail]   = useState('');
+  const [resetQ,       setResetQ]       = useState('');
+  const [resetAnswer,  setResetAnswer]  = useState('');
+  const [resetToken,   setResetToken]   = useState('');
+  const [resetNewPw,   setResetNewPw]   = useState('');
+  const [resetShowPw,  setResetShowPw]  = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError,   setResetError]   = useState('');
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const handleForgotPassword = async () => {
-    if (!forgotEmail || !validateEmail(forgotEmail)) {
-      setForgotState('error');
-      setForgotMsg('Please enter a valid email address.');
-      return;
-    }
-    setForgotState('loading');
+  // Load security questions when signup tab opened
+  const loadSecurityQuestions = async () => {
+    if (securityQuestions.length) return;
     try {
-      await api.auth.forgotPassword(forgotEmail);
-      setForgotState('sent');
-      setForgotMsg(`A password reset link has been sent to ${forgotEmail}. Please check your inbox.`);
-    } catch (e) {
-      setForgotState('error');
-      setForgotMsg(e.message || 'Failed to send reset email. Please try again.');
-    }
+      const d = await api.auth.getSecurityQuestions();
+      setSecurityQuestions(d.questions || []);
+      if (d.questions?.length) setSecurityQuestion(d.questions[0]);
+    } catch {}
+  };
+
+  const openReset = () => {
+    setShowReset(true);
+    setResetStep('email');
+    setResetEmail('');
+    setResetQ('');
+    setResetAnswer('');
+    setResetToken('');
+    setResetNewPw('');
+    setResetError('');
+  };
+
+  // Step 1 — verify email
+  const handleResetEmail = async () => {
+    if (!resetEmail || !validateEmail(resetEmail)) { setResetError('Please enter a valid email address.'); return; }
+    setResetLoading(true); setResetError('');
+    try {
+      const d = await api.auth.resetVerifyEmail(resetEmail);
+      setResetQ(d.question);
+      setResetStep('answer');
+    } catch (e) { setResetError(e.message || 'Email not found.'); }
+    finally { setResetLoading(false); }
+  };
+
+  // Step 2 — verify answer
+  const handleResetAnswer = async () => {
+    if (!resetAnswer.trim()) { setResetError('Please enter your answer.'); return; }
+    setResetLoading(true); setResetError('');
+    try {
+      const d = await api.auth.resetVerifyAnswer(resetEmail, resetAnswer);
+      setResetToken(d.resetToken);
+      setResetStep('newpw');
+    } catch (e) { setResetError(e.message || 'Incorrect answer.'); }
+    finally { setResetLoading(false); }
+  };
+
+  // Step 3 — set new password
+  const handleResetSetPw = async () => {
+    const pwErr = validatePassword(resetNewPw);
+    if (pwErr) { setResetError(pwErr); return; }
+    setResetLoading(true); setResetError('');
+    try {
+      const d = await api.auth.resetSetPassword(resetToken, resetNewPw);
+      setResetStep('done');
+      // auto-login after reset
+      setTimeout(() => { onLogin(d.token, d.user); setShowReset(false); }, 1800);
+    } catch (e) { setResetError(e.message || 'Failed to reset password.'); }
+    finally { setResetLoading(false); }
   };
 
   const handleSubmit = async () => {
@@ -96,11 +152,13 @@ export default function LoginPage({ onLogin, onBack }) {
       if (!form.name.trim()) { setError('Full name is required.'); return; }
       const pwErr = validatePassword(form.password);
       if (pwErr) { setError(pwErr); return; }
+      if (!securityQuestion) { setError('Please select a security question.'); return; }
+      if (!securityAnswer.trim() || securityAnswer.trim().length < 2) { setError('Please enter a security answer (at least 2 characters).'); return; }
     }
     setLoading(true);
     try {
       const res = mode === 'signup'
-        ? await api.auth.signup(form.name, form.email, form.password, role)
+        ? await api.auth.signup(form.name, form.email, form.password, role, securityQuestion, securityAnswer)
         : await api.auth.login(form.email, form.password);
       onLogin(res.token, res.user);
     } catch (e) { setError(e.message || 'Authentication failed. Please try again.'); }
@@ -195,7 +253,7 @@ export default function LoginPage({ onLogin, onBack }) {
               <label className="form-label" style={{ marginBottom:0 }}>Password</label>
               {mode === 'login' && (
                 <button style={{ background:'none', border:'none', color:'var(--accent)', fontSize:13, cursor:'pointer', fontFamily:"Inter,sans-serif", fontWeight:500 }}
-                  onClick={() => { setShowForgot(true); setForgotEmail(form.email||''); setForgotState('idle'); setForgotMsg(''); }}>
+                  onClick={() => { openReset(); setResetEmail(form.email||''); }}>
                   Forgot password?
                 </button>
               )}
@@ -225,6 +283,29 @@ export default function LoginPage({ onLogin, onBack }) {
           )}
 
           {mode === 'signup' && (
+            <div className="form-group">
+              <label className="form-label">Security Question <span style={{ fontSize:11, color:'var(--ink-4)', fontWeight:400 }}>(for password recovery)</span></label>
+              <select
+                value={securityQuestion}
+                onChange={e => setSecurityQuestion(e.target.value)}
+                style={{ width:'100%', padding:'11px 14px', borderRadius:9, border:'1.5px solid var(--border-2)', fontSize:14, fontFamily:"Inter,sans-serif", color:'var(--ink)', background:'var(--surface)', cursor:'pointer', outline:'none', marginBottom:8 }}>
+                {securityQuestions.length === 0 && <option value="">Loading…</option>}
+                {securityQuestions.map(q => <option key={q} value={q}>{q}</option>)}
+              </select>
+              <input
+                type="text"
+                value={securityAnswer}
+                onChange={e => setSecurityAnswer(e.target.value)}
+                placeholder="Your answer (not case-sensitive)"
+                style={{ fontSize:14 }}
+              />
+              <p style={{ fontSize:11.5, color:'var(--ink-4)', marginTop:5, fontFamily:"Inter,sans-serif" }}>
+                🔒 Used to reset your password directly — no email needed.
+              </p>
+            </div>
+          )}
+
+          {mode === 'signup' && (
             <p style={{ fontSize:12, color:'var(--ink-3)', fontFamily:"Inter,sans-serif", lineHeight:1.6, marginBottom:16 }}>
               By creating an account, you agree to our <span style={{ color:'var(--accent)', cursor:'pointer' }}>Terms of Service</span> and <span style={{ color:'var(--accent)', cursor:'pointer' }}>Privacy Policy</span>.
             </p>
@@ -237,7 +318,7 @@ export default function LoginPage({ onLogin, onBack }) {
 
           <p style={{ textAlign:'center', marginTop:20, fontSize:14, color:'var(--ink-3)', fontFamily:"Inter,sans-serif" }}>
             {mode==='login' ? "Don't have an account? " : "Already have an account? "}
-            <button onClick={() => { setMode(mode==='login'?'signup':'login'); setError(''); }}
+            <button onClick={() => { const next = mode==='login'?'signup':'login'; setMode(next); setError(''); if (next==='signup') loadSecurityQuestions(); }}
               style={{ background:'none', border:'none', color:'var(--accent)', fontWeight:600, cursor:'pointer', fontSize:14, fontFamily:"Inter,sans-serif" }}>
               {mode==='login' ? 'Sign up free' : 'Sign in'}
             </button>
@@ -260,59 +341,93 @@ export default function LoginPage({ onLogin, onBack }) {
         </div>
       </div>
 
-      {/* ── Forgot Password Modal ── */}
-      {showForgot && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}
-          onClick={e => e.target === e.currentTarget && setShowForgot(false)}>
-          <div style={{ background:'#fff', borderRadius:16, padding:'32px 36px', width:'100%', maxWidth:420, boxShadow:'0 20px 60px rgba(0,0,0,0.2)', position:'relative' }}>
-            <button onClick={() => setShowForgot(false)} style={{ position:'absolute', top:16, right:18, background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#9CA3AF', lineHeight:1 }}>×</button>
+      {/* ── Password Reset Modal (3-step, no email needed) ── */}
+      {showReset && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.50)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}
+          onClick={e => e.target === e.currentTarget && setShowReset(false)}>
+          <div style={{ background:'#fff', borderRadius:18, padding:'36px 38px', width:'100%', maxWidth:430, boxShadow:'0 24px 64px rgba(0,0,0,0.22)', position:'relative' }}>
+            <button onClick={() => setShowReset(false)} style={{ position:'absolute', top:16, right:18, background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#9CA3AF', lineHeight:1 }}>×</button>
 
-            {forgotState === 'sent' ? (
-              <div style={{ textAlign:'center', padding:'8px 0' }}>
-                <div style={{ fontSize:44, marginBottom:16 }}>📧</div>
-                <h3 style={{ fontFamily:"Inter,sans-serif", fontSize:20, fontWeight:700, color:'#1F2937', marginBottom:10 }}>Check your inbox</h3>
-                <p style={{ fontSize:14, color:'#6B7280', lineHeight:1.7, fontFamily:"Inter,sans-serif", marginBottom:24 }}>{forgotMsg}</p>
-                <p style={{ fontSize:12.5, color:'#9CA3AF', fontFamily:"Inter,sans-serif", marginBottom:20 }}>Didn't receive it? Check spam or try again.</p>
-                <button onClick={() => setForgotState('idle')} style={{ background:'none', border:'1px solid #e5e7eb', borderRadius:8, padding:'9px 20px', cursor:'pointer', fontSize:14, color:'#374151', fontFamily:"Inter,sans-serif", fontWeight:500, marginRight:8 }}>Try again</button>
-                <button onClick={() => setShowForgot(false)} style={{ background:'#3B82F6', border:'none', borderRadius:8, padding:'9px 20px', cursor:'pointer', fontSize:14, color:'#fff', fontFamily:"Inter,sans-serif", fontWeight:600 }}>Done</button>
+            {/* Step progress dots */}
+            {resetStep !== 'done' && (
+              <div style={{ display:'flex', gap:6, justifyContent:'center', marginBottom:28 }}>
+                {['email','answer','newpw'].map((s,i) => (
+                  <div key={s} style={{ width: resetStep===s ? 22 : 8, height:8, borderRadius:4, background: ['email','answer','newpw'].indexOf(resetStep) >= i ? '#3B82F6' : '#E5E7EB', transition:'all 0.25s' }} />
+                ))}
               </div>
-            ) : (
+            )}
+
+            {/* ── DONE ── */}
+            {resetStep === 'done' && (
+              <div style={{ textAlign:'center', padding:'12px 0' }}>
+                <div style={{ width:64, height:64, borderRadius:'50%', background:'rgba(22,163,74,0.1)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px', fontSize:30 }}>✓</div>
+                <h3 style={{ fontFamily:"Inter,sans-serif", fontSize:22, fontWeight:700, color:'#1F2937', marginBottom:10 }}>Password Reset!</h3>
+                <p style={{ fontSize:14, color:'#6B7280', fontFamily:"Inter,sans-serif" }}>Signing you in automatically…</p>
+              </div>
+            )}
+
+            {/* ── STEP 1: Email ── */}
+            {resetStep === 'email' && (
               <>
-                <div style={{ marginBottom:24 }}>
-                  <h3 style={{ fontFamily:"Inter,sans-serif", fontSize:20, fontWeight:700, color:'#1F2937', marginBottom:8 }}>Reset your password</h3>
-                  <p style={{ fontSize:14, color:'#6B7280', lineHeight:1.6, fontFamily:"Inter,sans-serif" }}>Enter the email address linked to your account and we'll send you a reset link.</p>
-                </div>
-
-                {forgotState === 'error' && (
-                  <div style={{ background:'rgba(220,38,38,0.08)', border:'1px solid rgba(220,38,38,0.25)', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#dc2626', fontFamily:"Inter,sans-serif" }}>
-                    {forgotMsg}
-                  </div>
-                )}
-
+                <h3 style={{ fontFamily:"Inter,sans-serif", fontSize:20, fontWeight:700, color:'#1F2937', marginBottom:6 }}>Reset your password</h3>
+                <p style={{ fontSize:14, color:'#6B7280', fontFamily:"Inter,sans-serif", marginBottom:24, lineHeight:1.6 }}>Enter your account email and we'll verify it with your security question — no email link needed.</p>
+                {resetError && <div style={{ background:'rgba(220,38,38,0.08)', border:'1px solid rgba(220,38,38,0.25)', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#dc2626', fontFamily:"Inter,sans-serif" }}>{resetError}</div>}
                 <div className="form-group">
                   <label className="form-label">Email Address</label>
-                  <input
-                    type="email"
-                    value={forgotEmail}
-                    onChange={e => setForgotEmail(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleForgotPassword()}
-                    placeholder="Enter your email"
-                    autoFocus
-                    style={{ fontSize:15 }}
-                  />
+                  <input type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} onKeyDown={e => e.key==='Enter' && handleResetEmail()} placeholder="you@example.com" autoFocus style={{ fontSize:15 }} />
                 </div>
-
-                <button
-                  onClick={handleForgotPassword}
-                  disabled={forgotState === 'loading'}
-                  style={{ width:'100%', padding:'13px', borderRadius:10, border:'none', background:'#3B82F6', color:'#fff', fontSize:15, fontWeight:600, cursor:'pointer', fontFamily:"Inter,sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity: forgotState==='loading' ? 0.7 : 1, transition:'opacity 0.15s' }}>
-                  {forgotState === 'loading' ? <><Spinner size={15} color="white" /> Sending…</> : 'Send Reset Link'}
+                <button onClick={handleResetEmail} disabled={resetLoading}
+                  style={{ width:'100%', padding:'13px', borderRadius:10, border:'none', background:'#3B82F6', color:'#fff', fontSize:15, fontWeight:600, cursor:'pointer', fontFamily:"Inter,sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity:resetLoading?0.7:1 }}>
+                  {resetLoading ? <><Spinner size={15} color="white" /> Checking…</> : 'Continue →'}
                 </button>
-
                 <p style={{ textAlign:'center', marginTop:16, fontSize:13, color:'#9CA3AF', fontFamily:"Inter,sans-serif" }}>
-                  Remember your password?{' '}
-                  <button onClick={() => setShowForgot(false)} style={{ background:'none', border:'none', color:'#3B82F6', fontWeight:600, cursor:'pointer', fontSize:13, fontFamily:"Inter,sans-serif" }}>Sign in</button>
+                  Remember it? <button onClick={() => setShowReset(false)} style={{ background:'none', border:'none', color:'#3B82F6', fontWeight:600, cursor:'pointer', fontSize:13, fontFamily:"Inter,sans-serif" }}>Sign in</button>
                 </p>
+              </>
+            )}
+
+            {/* ── STEP 2: Security Answer ── */}
+            {resetStep === 'answer' && (
+              <>
+                <h3 style={{ fontFamily:"Inter,sans-serif", fontSize:20, fontWeight:700, color:'#1F2937', marginBottom:6 }}>Security Question</h3>
+                <p style={{ fontSize:13.5, color:'#6B7280', fontFamily:"Inter,sans-serif", marginBottom:24, lineHeight:1.6 }}>Answer the security question you set when signing up.</p>
+                <div style={{ background:'#F3F4F6', borderRadius:10, padding:'14px 16px', marginBottom:20, fontSize:14, color:'#374151', fontFamily:"Inter,sans-serif", fontWeight:500, lineHeight:1.5 }}>
+                  🔐 {resetQ}
+                </div>
+                {resetError && <div style={{ background:'rgba(220,38,38,0.08)', border:'1px solid rgba(220,38,38,0.25)', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#dc2626', fontFamily:"Inter,sans-serif" }}>{resetError}</div>}
+                <div className="form-group">
+                  <label className="form-label">Your Answer</label>
+                  <input type="text" value={resetAnswer} onChange={e => setResetAnswer(e.target.value)} onKeyDown={e => e.key==='Enter' && handleResetAnswer()} placeholder="Enter your answer" autoFocus style={{ fontSize:15 }} />
+                  <p style={{ fontSize:11.5, color:'var(--ink-4)', marginTop:4, fontFamily:"Inter,sans-serif" }}>Not case-sensitive</p>
+                </div>
+                <button onClick={handleResetAnswer} disabled={resetLoading}
+                  style={{ width:'100%', padding:'13px', borderRadius:10, border:'none', background:'#3B82F6', color:'#fff', fontSize:15, fontWeight:600, cursor:'pointer', fontFamily:"Inter,sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity:resetLoading?0.7:1 }}>
+                  {resetLoading ? <><Spinner size={15} color="white" /> Verifying…</> : 'Verify Answer →'}
+                </button>
+                <button onClick={() => { setResetStep('email'); setResetError(''); }} style={{ width:'100%', marginTop:10, padding:'10px', background:'none', border:'none', cursor:'pointer', color:'#6B7280', fontSize:13, fontFamily:"Inter,sans-serif" }}>← Back</button>
+              </>
+            )}
+
+            {/* ── STEP 3: New Password ── */}
+            {resetStep === 'newpw' && (
+              <>
+                <h3 style={{ fontFamily:"Inter,sans-serif", fontSize:20, fontWeight:700, color:'#1F2937', marginBottom:6 }}>Set New Password</h3>
+                <p style={{ fontSize:13.5, color:'#6B7280', fontFamily:"Inter,sans-serif", marginBottom:24, lineHeight:1.6 }}>Identity confirmed! Choose a strong new password.</p>
+                {resetError && <div style={{ background:'rgba(220,38,38,0.08)', border:'1px solid rgba(220,38,38,0.25)', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#dc2626', fontFamily:"Inter,sans-serif" }}>{resetError}</div>}
+                <div className="form-group">
+                  <label className="form-label">New Password</label>
+                  <div style={{ position:'relative' }}>
+                    <input type={resetShowPw?'text':'password'} value={resetNewPw} onChange={e => setResetNewPw(e.target.value)} onKeyDown={e => e.key==='Enter' && handleResetSetPw()} placeholder="••••••••" autoFocus style={{ fontSize:15, paddingRight:60 }} />
+                    <button onClick={() => setResetShowPw(p => !p)} style={{ position:'absolute', right:14, top:'50%', transform:'translateY(-50%)', background:'none', border:'none', color:'var(--ink-3)', cursor:'pointer', fontSize:13, fontFamily:"Inter,sans-serif", fontWeight:500 }}>
+                      {resetShowPw ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <PasswordStrength password={resetNewPw} />
+                </div>
+                <button onClick={handleResetSetPw} disabled={resetLoading}
+                  style={{ width:'100%', padding:'13px', borderRadius:10, border:'none', background:'#3B82F6', color:'#fff', fontSize:15, fontWeight:600, cursor:'pointer', fontFamily:"Inter,sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity:resetLoading?0.7:1, marginTop:8 }}>
+                  {resetLoading ? <><Spinner size={15} color="white" /> Saving…</> : '🔒 Reset & Sign In'}
+                </button>
               </>
             )}
           </div>

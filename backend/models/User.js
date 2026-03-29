@@ -87,6 +87,9 @@ const UserSchema = new mongoose.Schema({
   passwordResetToken:   { type: String, default: '' },
   passwordResetExpires: { type: Date },
 
+  securityQuestion: { type: String, default: '' },
+  securityAnswer:   { type: String, default: '' }, // stored as bcrypt hash
+
   shortlistedCandidates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
 

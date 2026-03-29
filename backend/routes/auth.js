@@ -1,9 +1,21 @@
 const router   = require('express').Router();
 const jwt      = require('jsonwebtoken');
 const crypto   = require('crypto');
+const bcrypt   = require('bcryptjs');
 const User     = require('../models/User');
 const auth     = require('../middleware/auth');
 const Activity = require('../models/Activity');
+
+const SECURITY_QUESTIONS = [
+  "What was the name of your first pet?",
+  "What city were you born in?",
+  "What is your mother's maiden name?",
+  "What was the name of your first school?",
+  "What was the make of your first car?",
+  "What is your oldest sibling's middle name?",
+  "What street did you grow up on?",
+  "What was your childhood nickname?",
+];
 
 function signToken(id) {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -24,9 +36,15 @@ function validateEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// GET available security questions
+router.get('/security-questions', (_req, res) => {
+  res.json({ questions: SECURITY_QUESTIONS });
+});
+
+// SIGNUP (now requires security question)
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, securityQuestion, securityAnswer } = req.body;
 
     if (!name?.trim())         return res.status(400).json({ message: 'Full name is required.' });
     if (!email)                return res.status(400).json({ message: 'Email is required.' });
@@ -35,6 +53,13 @@ router.post('/signup', async (req, res) => {
     const pwErr = validatePassword(password);
     if (pwErr) return res.status(400).json({ message: pwErr });
 
+    if (!securityQuestion || !SECURITY_QUESTIONS.includes(securityQuestion)) {
+      return res.status(400).json({ message: 'Please select a valid security question.' });
+    }
+    if (!securityAnswer?.trim() || securityAnswer.trim().length < 2) {
+      return res.status(400).json({ message: 'Security answer must be at least 2 characters.' });
+    }
+
     const exists = await User.findOne({ email: email.toLowerCase() });
     if (exists) return res.status(409).json({ message: 'An account with this email already exists.' });
 
@@ -42,11 +67,15 @@ router.post('/signup', async (req, res) => {
     const allowedRoles = ['user', 'recruiter', 'candidate'];
     const resolvedRole = allowedRoles.includes(role) ? (roleMap[role] || role) : 'user';
 
+    const hashedAnswer = await bcrypt.hash(securityAnswer.trim().toLowerCase(), 10);
+
     const user = await User.create({
-      name:     name.trim(),
-      email:    email.toLowerCase(),
+      name:             name.trim(),
+      email:            email.toLowerCase(),
       password,
-      role:     resolvedRole,
+      role:             resolvedRole,
+      securityQuestion,
+      securityAnswer:   hashedAnswer,
     });
 
     await Activity.create({
@@ -64,6 +93,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
+// LOGIN
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -93,6 +123,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ME
 router.get('/me', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -103,99 +134,85 @@ router.get('/me', auth, async (req, res) => {
   }
 });
 
-router.post('/forgot-password', async (req, res) => {
+// STEP 1: Verify email — return the security question
+router.post('/reset/verify-email', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !validateEmail(email)) {
       return res.status(400).json({ message: 'Please provide a valid email address.' });
     }
-
     const user = await User.findOne({ email: email.toLowerCase() });
-    // Always respond success to prevent email enumeration
     if (!user) {
-      return res.json({ message: 'If that email is registered, a reset link has been sent.' });
+      return res.status(404).json({ message: 'No account found with this email address.' });
     }
-
-    // Generate a secure token
-    const rawToken   = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-    user.passwordResetToken   = hashedToken;
-    user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    await user.save({ validateBeforeSave: false });
-
-    // If email service is configured, send the email
-    const resetURL = `${process.env.FRONTEND_URL || 'http://localhost:5173'}?reset_token=${rawToken}`;
-
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-      try {
-        const nodemailer = require('nodemailer');
-        const transporter = nodemailer.createTransport({
-          host:   process.env.SMTP_HOST,
-          port:   parseInt(process.env.SMTP_PORT || '587'),
-          secure: process.env.SMTP_SECURE === 'true',
-          auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-        });
-        await transporter.sendMail({
-          from:    `"SkillTwinAI" <${process.env.SMTP_USER}>`,
-          to:      user.email,
-          subject: 'Reset your SkillTwinAI password',
-          html: `
-            <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f9fafb;border-radius:12px">
-              <h2 style="color:#1F2937;margin-bottom:8px">Reset your password</h2>
-              <p style="color:#6B7280;margin-bottom:24px">You requested a password reset for your SkillTwinAI account. Click the button below to set a new password. This link expires in 1 hour.</p>
-              <a href="${resetURL}" style="display:inline-block;padding:13px 28px;background:#3B82F6;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Reset Password</a>
-              <p style="color:#9CA3AF;font-size:12px;margin-top:24px">If you didn't request this, you can safely ignore this email. Your password won't change.</p>
-              <p style="color:#9CA3AF;font-size:12px">Or copy this link: ${resetURL}</p>
-            </div>
-          `,
-        });
-      } catch (mailErr) {
-        console.error('[auth/forgot-password] Mail error:', mailErr.message);
-      }
-    } else {
-      // No email service — log the reset URL for dev/testing
-      console.log(`[DEV] Password reset URL for ${user.email}: ${resetURL}`);
+    if (!user.securityQuestion || !user.securityAnswer) {
+      return res.status(400).json({ message: 'This account has no security question set. Please contact support.' });
     }
-
-    res.json({ message: 'If that email is registered, a reset link has been sent.' });
+    res.json({ question: user.securityQuestion });
   } catch (err) {
-    console.error('[auth/forgot-password]', err.message);
-    res.status(500).json({ message: 'Failed to process request. Please try again.' });
+    console.error('[reset/verify-email]', err.message);
+    res.status(500).json({ message: 'Something went wrong. Please try again.' });
   }
 });
 
-router.post('/reset-password', async (req, res) => {
+// STEP 2: Verify answer — return a short-lived reset token
+router.post('/reset/verify-answer', async (req, res) => {
   try {
-    const { token, password } = req.body;
-    if (!token || !password) {
-      return res.status(400).json({ message: 'Token and new password are required.' });
+    const { email, answer } = req.body;
+    if (!email || !answer) return res.status(400).json({ message: 'Email and answer are required.' });
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || !user.securityAnswer) return res.status(400).json({ message: 'Invalid request.' });
+
+    const match = await bcrypt.compare(answer.trim().toLowerCase(), user.securityAnswer);
+    if (!match) return res.status(400).json({ message: 'Incorrect answer. Please try again.' });
+
+    const resetToken = jwt.sign(
+      { id: user._id, purpose: 'password-reset' },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' },
+    );
+    res.json({ resetToken });
+  } catch (err) {
+    console.error('[reset/verify-answer]', err.message);
+    res.status(500).json({ message: 'Something went wrong. Please try again.' });
+  }
+});
+
+// STEP 3: Set new password
+router.post('/reset/set-password', async (req, res) => {
+  try {
+    const { resetToken, password } = req.body;
+    if (!resetToken || !password) return res.status(400).json({ message: 'Reset token and new password are required.' });
+
+    let payload;
+    try {
+      payload = jwt.verify(resetToken, process.env.JWT_SECRET);
+    } catch {
+      return res.status(400).json({ message: 'Reset session expired. Please start over.' });
     }
+
+    if (payload.purpose !== 'password-reset') return res.status(400).json({ message: 'Invalid reset token.' });
 
     const pwErr = validatePassword(password);
     if (pwErr) return res.status(400).json({ message: pwErr });
 
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-    const user = await User.findOne({
-      passwordResetToken:   hashedToken,
-      passwordResetExpires: { $gt: Date.now() },
-    });
+    const user = await User.findById(payload.id);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
 
-    if (!user) {
-      return res.status(400).json({ message: 'Password reset link is invalid or has expired.' });
-    }
-
-    user.password             = password;
-    user.passwordResetToken   = '';
-    user.passwordResetExpires = undefined;
+    user.password = password;
     await user.save();
 
-    const jwtToken = signToken(user._id);
-    res.json({ token: jwtToken, user: user.toPublicProfile(), message: 'Password reset successfully.' });
+    const token = signToken(user._id);
+    res.json({ token, user: user.toPublicProfile(), message: 'Password reset successfully.' });
   } catch (err) {
-    console.error('[auth/reset-password]', err.message);
+    console.error('[reset/set-password]', err.message);
     res.status(500).json({ message: 'Failed to reset password. Please try again.' });
   }
 });
+
+// Legacy stubs (kept so old clients don't crash)
+router.post('/forgot-password', (_req, res) => res.json({ message: 'Please use the on-site password reset.' }));
+router.post('/reset-password',  (_req, res) => res.status(410).json({ message: 'Deprecated. Use /reset/set-password.' }));
 
 module.exports = router;

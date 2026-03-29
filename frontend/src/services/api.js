@@ -15,11 +15,13 @@ async function req(path, opts = {}) {
 
 export const api = {
   auth: {
-    login:          (email, password)             => req('/auth/login',           { method: 'POST', body: JSON.stringify({ email, password }) }),
-    signup:         (name, email, password, role) => req('/auth/signup',          { method: 'POST', body: JSON.stringify({ name, email, password, role }) }),
-    me:             ()                            => req('/auth/me'),
-    forgotPassword: (email)                       => req('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
-    resetPassword:  (token, password)             => req('/auth/reset-password',  { method: 'POST', body: JSON.stringify({ token, password }) }),
+    login:              (email, password)                             => req('/auth/login',               { method: 'POST', body: JSON.stringify({ email, password }) }),
+    signup:             (name, email, password, role, sq, sa)        => req('/auth/signup',              { method: 'POST', body: JSON.stringify({ name, email, password, role, securityQuestion: sq, securityAnswer: sa }) }),
+    me:                 ()                                           => req('/auth/me'),
+    getSecurityQuestions: ()                                         => req('/auth/security-questions'),
+    resetVerifyEmail:   (email)                                      => req('/auth/reset/verify-email',  { method: 'POST', body: JSON.stringify({ email }) }),
+    resetVerifyAnswer:  (email, answer)                              => req('/auth/reset/verify-answer', { method: 'POST', body: JSON.stringify({ email, answer }) }),
+    resetSetPassword:   (resetToken, password)                       => req('/auth/reset/set-password',  { method: 'POST', body: JSON.stringify({ resetToken, password }) }),
   },
   users: {
     getProfile:      ()     => req('/users/profile'),
