@@ -56,14 +56,10 @@ const MLPredictionSchema = new mongoose.Schema({
 }, { _id: false });
 
 const UserSchema = new mongoose.Schema({
-  // Clerk integration — stores the Clerk userId for fast lookup
-  clerkId:  { type: String, default: '', index: true },
-
   name:     { type: String, required: true, trim: true },
   email:    { type: String, required: true, unique: true, lowercase: true, trim: true },
-  // Password is now managed by Clerk. This field is kept for backwards
-  // compatibility with existing records and for the pre-save hash hook,
-  // but new Clerk-based users store a placeholder value.
+  // Password is managed by Clerk — stored as a placeholder for new users.
+  // Kept for schema compatibility with existing records.
   password: { type: String, default: 'clerk-managed', minlength: 8 },
   role:     { type: String, enum: ['user', 'recruiter', 'admin'], default: 'user' },
 
@@ -97,15 +93,15 @@ UserSchema.index({ email: 1 });
 UserSchema.index({ role: 1 });
 UserSchema.index({ overallScore: -1 });
 
-// Only hash password when it is actually changed to a real value
+// Only hash password when changed to a real value
 UserSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
-  if (this.password === 'clerk-managed') return next(); // skip hashing for Clerk users
+  if (this.password === 'clerk-managed') return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
 
-// Recompute overall score when relevant fields change
+// Recompute overall score on relevant changes
 UserSchema.pre('save', function (next) {
   if (this.isModified('skills') || this.isModified('testResults') || this.isModified('certifications')) {
     this.overallScore = computeOverallScore(this);

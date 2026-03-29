@@ -1,5 +1,5 @@
-import { SignIn, SignUp } from '@clerk/clerk-react';
-import { useState } from 'react';
+import { SignIn, SignUp, useUser } from '@clerk/clerk-react';
+import { useState, useEffect } from 'react';
 
 const TESTIMONIALS = [
   { quote: "SkillTwinAI helped me land my dream role in 3 weeks. The verified skill scores made all the difference.", name: "Priya S.", role: "Frontend Engineer" },
@@ -7,10 +7,23 @@ const TESTIMONIALS = [
   { quote: "The AI coaching feature is like having a career advisor 24/7. I doubled my assessment scores in a month.", name: "Arjun K.", role: "Full Stack Developer" },
 ];
 
-export default function LoginPage({ onBack }) {
+export default function LoginPage({ onLogin, onBack }) {
   const [mode, setMode] = useState('login');
   const [tIdx, setTIdx] = useState(0);
+  const { isSignedIn, user: clerkUser } = useUser();
   const t = TESTIMONIALS[tIdx];
+
+  // When Clerk completes sign-in, trigger onLogin so App.jsx navigates to dashboard
+  useEffect(() => {
+    if (isSignedIn && clerkUser) {
+      // onLogin with null token — AuthContext will handle the real token sync
+      onLogin(null, {
+        name:  clerkUser.fullName || clerkUser.firstName || 'User',
+        email: clerkUser.primaryEmailAddress?.emailAddress || '',
+        role:  clerkUser.publicMetadata?.role || 'candidate',
+      });
+    }
+  }, [isSignedIn, clerkUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: '#f0f2f5' }}>
@@ -97,13 +110,13 @@ export default function LoginPage({ onBack }) {
                 elements: {
                   rootBox: { width: '100%' },
                   card: { boxShadow: '0 4px 24px rgba(0,0,0,0.08)', borderRadius: 14, border: '1px solid #e5e7eb' },
-                  headerTitle: { fontFamily: 'Inter, sans-serif' },
-                  headerSubtitle: { fontFamily: 'Inter, sans-serif' },
-                  formButtonPrimary: { backgroundColor: '#3B82F6', fontFamily: 'Inter, sans-serif', borderRadius: 9 },
+                  formButtonPrimary: { backgroundColor: '#3B82F6', borderRadius: 9 },
                   footerActionLink: { color: '#3B82F6' },
                 },
               }}
               routing="hash"
+              redirectUrl={window.location.href}
+              afterSignInUrl={window.location.href}
             />
           ) : (
             <SignUp
@@ -111,13 +124,13 @@ export default function LoginPage({ onBack }) {
                 elements: {
                   rootBox: { width: '100%' },
                   card: { boxShadow: '0 4px 24px rgba(0,0,0,0.08)', borderRadius: 14, border: '1px solid #e5e7eb' },
-                  headerTitle: { fontFamily: 'Inter, sans-serif' },
-                  headerSubtitle: { fontFamily: 'Inter, sans-serif' },
-                  formButtonPrimary: { backgroundColor: '#3B82F6', fontFamily: 'Inter, sans-serif', borderRadius: 9 },
+                  formButtonPrimary: { backgroundColor: '#3B82F6', borderRadius: 9 },
                   footerActionLink: { color: '#3B82F6' },
                 },
               }}
               routing="hash"
+              redirectUrl={window.location.href}
+              afterSignUpUrl={window.location.href}
             />
           )}
         </div>

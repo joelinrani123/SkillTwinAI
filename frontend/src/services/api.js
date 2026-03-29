@@ -15,17 +15,11 @@ async function req(path, opts = {}) {
 
 export const api = {
   auth: {
-    /**
-     * Call once after Clerk sign-up to register the user in your MongoDB.
-     * Pass the Clerk session token as the Authorization header via saveToken() first.
-     */
+    // Register a new user in MongoDB after Clerk sign-up
     signup: (name, email, role) =>
       req('/auth/signup', { method: 'POST', body: JSON.stringify({ name, email, role }) }),
 
-    /**
-     * Call after every Clerk sign-in to exchange the Clerk JWT for a backend JWT.
-     * Pass the Clerk session token via saveToken() first.
-     */
+    // Get a backend JWT after Clerk sign-in
     login: (email) =>
       req('/auth/login', { method: 'POST', body: JSON.stringify({ email }) }),
 
@@ -75,11 +69,11 @@ export const api = {
     updateAppStatus:  (jobId, appId, status) => req(`/jobs/${jobId}/applicants/${appId}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
   },
   candidates: {
-    getAll:      (params = {}) => { const qs = new URLSearchParams(params).toString(); return req(`/candidates${qs ? `?${qs}` : ''}`); },
-    getOne:      id            => req(`/candidates/${id}`),
-    shortlist:   id            => req(`/candidates/${id}/shortlist`, { method: 'POST' }),
-    unshortlist: id            => req(`/candidates/${id}/shortlist`, { method: 'DELETE' }),
-    getShortlisted: ()         => req('/candidates/shortlisted/all'),
+    getAll:         (params = {}) => { const qs = new URLSearchParams(params).toString(); return req(`/candidates${qs ? `?${qs}` : ''}`); },
+    getOne:         id            => req(`/candidates/${id}`),
+    shortlist:      id            => req(`/candidates/${id}/shortlist`, { method: 'POST' }),
+    unshortlist:    id            => req(`/candidates/${id}/shortlist`, { method: 'DELETE' }),
+    getShortlisted: ()            => req('/candidates/shortlisted/all'),
   },
   messages: {
     getInbox:       ()     => req('/messages'),
@@ -91,11 +85,11 @@ export const api = {
     deleteMessage:  id     => req(`/messages/${id}`, { method: 'DELETE' }),
   },
   interviews: {
-    getAll:    ()         => req('/interviews'),
-    getMy:     ()         => req('/interviews/my'),
-    schedule:  data       => req('/interviews',      { method: 'POST',   body: JSON.stringify(data) }),
-    update:    (id, data) => req(`/interviews/${id}`, { method: 'PUT',   body: JSON.stringify(data) }),
-    remove:    id         => req(`/interviews/${id}`, { method: 'DELETE' }),
+    getAll:   ()         => req('/interviews'),
+    getMy:    ()         => req('/interviews/my'),
+    schedule: data       => req('/interviews',       { method: 'POST',   body: JSON.stringify(data) }),
+    update:   (id, data) => req(`/interviews/${id}`, { method: 'PUT',    body: JSON.stringify(data) }),
+    remove:   id         => req(`/interviews/${id}`, { method: 'DELETE' }),
   },
   analysis: { predict: () => req('/ml/predict', { method: 'POST' }) },
   ai: {
@@ -105,15 +99,15 @@ export const api = {
     analyze:   userId              => req(`/ai/analyze/${userId}`),
   },
   admin: {
-    stats:          ()           => req('/admin/stats'),
-    users:          ()           => req('/admin/users'),
-    deleteUser:     id           => req(`/admin/users/${id}`,           { method: 'DELETE' }),
-    updateRole:     (id, role)   => req(`/admin/users/${id}/role`,      { method: 'PATCH', body: JSON.stringify({ role }) }),
-    getSettings:    ()           => req('/admin/settings'),
-    saveSettings:   data         => req('/admin/settings',              { method: 'PUT',   body: JSON.stringify(data) }),
-    recentActivity: ()           => req('/admin/activity'),
-    mlStats:        ()           => req('/admin/ml/dataset'),
-    mlRetrain:      ()           => req('/admin/ml/retrain',            { method: 'POST' }),
-    resetSkills:    id           => req(`/admin/users/${id}/reset-skills`, { method: 'POST' }),
+    stats:          ()         => req('/admin/stats'),
+    users:          ()         => req('/admin/users'),
+    deleteUser:     id         => req(`/admin/users/${id}`,              { method: 'DELETE' }),
+    updateRole:     (id, role) => req(`/admin/users/${id}/role`,         { method: 'PATCH',  body: JSON.stringify({ role }) }),
+    getSettings:    ()         => req('/admin/settings'),
+    saveSettings:   data       => req('/admin/settings',                 { method: 'PUT',    body: JSON.stringify(data) }),
+    recentActivity: ()         => req('/admin/activity'),
+    mlStats:        ()         => req('/admin/ml/dataset'),
+    mlRetrain:      ()         => req('/admin/ml/retrain',               { method: 'POST' }),
+    resetSkills:    id         => req(`/admin/users/${id}/reset-skills`, { method: 'POST' }),
   },
 };

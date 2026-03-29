@@ -4,7 +4,6 @@ import { api, saveToken, clearToken } from '../services/api';
 
 const AuthContext = createContext(null);
 
-// The backend stores candidates as role='user'. Normalise for the frontend.
 function normaliseRole(rawRole) {
   if (rawRole === 'user') return 'candidate';
   return rawRole || 'candidate';
@@ -18,12 +17,10 @@ export function AuthProvider({ children }) {
   const [auth,    setAuth]    = useState(null);
   const [booting, setBooting] = useState(true);
 
-  // Sync Clerk session → backend JWT + user profile
   useEffect(() => {
     if (!clerkLoaded) return;
 
     if (!clerkUser) {
-      // Signed out
       clearToken();
       setUser(null);
       setAuth(null);
@@ -33,43 +30,59 @@ export function AuthProvider({ children }) {
 
     (async () => {
       try {
-        // Get a short-lived Clerk JWT and exchange it for a backend session token
         const clerkToken = await getToken();
+        if (!clerkToken) throw new Error('No Clerk token');
         saveToken(clerkToken);
 
-        // Try to fetch full profile from your backend
+        const email = clerkUser.primaryEmailAddress?.emailAddress || '';
+        const name  = clerkUser.fullName || clerkUser.firstName || 'User';
+
+        let backendUser = null;
+
+        // Try login first (existing user)
         try {
-          const profile = await api.users.getProfile();
-          const rawRole = profile.user?.role || 'candidate';
-          const role = normaliseRole(rawRole);
-          setUser({ ...(profile.user || profile), role });
-          setAuth({ role });
+          const loginRes = await api.auth.login(email);
+          backendUser = loginRes.user;
+          if (loginRes.token) saveToken(loginRes.token);
         } catch {
-          // Backend profile not found yet — use Clerk data as fallback
+          // User not in DB yet — sign them up
+          try {
+            const signupRes = await api.auth.signup(name, email, 'candidate');
+            backendUser = signupRes.user;
+            if (signupRes.token) saveToken(signupRes.token);
+          } catch (err) {
+            console.error('[AuthContext] signup error', err);
+          }
+        }
+
+        if (backendUser) {
+          const role = normaliseRole(backendUser.role);
+          setUser({ ...backendUser, role });
+          setAuth({ role });
+        } else {
+          // Fallback to Clerk data so screen is never blank
           const role = normaliseRole(clerkUser.publicMetadata?.role);
-          setUser({
-            _id:    clerkUser.id,
-            name:   clerkUser.fullName || clerkUser.firstName || 'User',
-            email:  clerkUser.primaryEmailAddress?.emailAddress || '',
-            role,
-          });
+          setUser({ _id: clerkUser.id, name, email, role });
           setAuth({ role });
         }
       } catch (err) {
-        console.error('[AuthContext] token sync failed', err);
-        clearToken();
+        console.error('[AuthContext] sync error', err);
+        // Never leave a blank screen — fall back to Clerk data
+        const role  = normaliseRole(clerkUser.publicMetadata?.role);
+        const name  = clerkUser.fullName || clerkUser.firstName || 'User';
+        const email = clerkUser.primaryEmailAddress?.emailAddress || '';
+        setUser({ _id: clerkUser.id, name, email, role });
+        setAuth({ role });
       } finally {
         setBooting(false);
       }
     })();
   }, [clerkUser, clerkLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Called after Clerk sign-in/sign-up completes (e.g. via onLogin prop if you use it)
-  const login = async (token, u) => {
-    saveToken(token);
+  const login = (token, u) => {
+    if (token) saveToken(token);
     const role = normaliseRole(u?.role);
-    const normUser = { ...u, role };
-    setUser(normUser);
+    setUser({ ...u, role });
     setAuth({ role });
   };
 
@@ -77,7 +90,7 @@ export function AuthProvider({ children }) {
     clearToken();
     setUser(null);
     setAuth(null);
-    await signOut();
+    try { await signOut(); } catch {}
   };
 
   const refreshUser = async () => {
