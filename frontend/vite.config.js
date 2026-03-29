@@ -17,7 +17,4 @@ export default defineConfig({
     minify: 'esbuild',
     target: 'esnext',
   },
-  optimizeDeps: {
-    include: ['react', 'react-dom', '@clerk/clerk-react'],
-  },
 });
