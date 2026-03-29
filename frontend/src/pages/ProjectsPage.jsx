@@ -155,10 +155,8 @@ export default function ProjectsPage({ user, onRefresh }) {
                     <p style={{ fontSize: 14, color: 'var(--ink-2)', lineHeight: 1.7, marginBottom: 10 }}>{p.description}</p>
                   )}
                   {(Array.isArray(p.tech) ? p.tech : []).length > 0 && (
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      {(Array.isArray(p.tech) ? p.tech : []).map(t => (
-                        <span key={t} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 6, background: 'var(--accent-dim)', border: '1px solid rgba(37,99,235,0.15)', color: 'var(--accent)', fontWeight: 600 }}>{t}</span>
-                      ))}
+                    <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 4 }}>
+                      {(Array.isArray(p.tech) ? p.tech : []).join(' · ')}
                     </div>
                   )}
                 </div>

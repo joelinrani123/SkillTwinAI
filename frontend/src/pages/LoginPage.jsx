@@ -58,14 +58,35 @@ const TESTIMONIALS = [
 ];
 
 export default function LoginPage({ onLogin, onBack }) {
-  const [mode,    setMode]    = useState('login');
-  const [role,    setRole]    = useState('candidate');
-  const [form,    setForm]    = useState({ name:'', email:'', password:'' });
-  const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-  const [tIdx,    setTIdx]    = useState(0);
+  const [mode,        setMode]        = useState('login');
+  const [role,        setRole]        = useState('candidate');
+  const [form,        setForm]        = useState({ name:'', email:'', password:'' });
+  const [showPwd,     setShowPwd]     = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
+  const [tIdx,        setTIdx]        = useState(0);
+  const [showForgot,  setShowForgot]  = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotState, setForgotState] = useState('idle'); // idle | loading | sent | error
+  const [forgotMsg,   setForgotMsg]   = useState('');
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleForgotPassword = async () => {
+    if (!forgotEmail || !validateEmail(forgotEmail)) {
+      setForgotState('error');
+      setForgotMsg('Please enter a valid email address.');
+      return;
+    }
+    setForgotState('loading');
+    try {
+      await api.auth.forgotPassword(forgotEmail);
+      setForgotState('sent');
+      setForgotMsg(`A password reset link has been sent to ${forgotEmail}. Please check your inbox.`);
+    } catch (e) {
+      setForgotState('error');
+      setForgotMsg(e.message || 'Failed to send reset email. Please try again.');
+    }
+  };
 
   const handleSubmit = async () => {
     setError('');
@@ -174,7 +195,7 @@ export default function LoginPage({ onLogin, onBack }) {
               <label className="form-label" style={{ marginBottom:0 }}>Password</label>
               {mode === 'login' && (
                 <button style={{ background:'none', border:'none', color:'var(--accent)', fontSize:13, cursor:'pointer', fontFamily:"Inter,sans-serif", fontWeight:500 }}
-                  onClick={() => setError('Password reset: configure your email service and add a /auth/forgot-password route to enable this.')}>
+                  onClick={() => { setShowForgot(true); setForgotEmail(form.email||''); setForgotState('idle'); setForgotMsg(''); }}>
                   Forgot password?
                 </button>
               )}
@@ -238,6 +259,65 @@ export default function LoginPage({ onLogin, onBack }) {
           </div>
         </div>
       </div>
+
+      {/* ── Forgot Password Modal ── */}
+      {showForgot && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}
+          onClick={e => e.target === e.currentTarget && setShowForgot(false)}>
+          <div style={{ background:'#fff', borderRadius:16, padding:'32px 36px', width:'100%', maxWidth:420, boxShadow:'0 20px 60px rgba(0,0,0,0.2)', position:'relative' }}>
+            <button onClick={() => setShowForgot(false)} style={{ position:'absolute', top:16, right:18, background:'none', border:'none', fontSize:22, cursor:'pointer', color:'#9CA3AF', lineHeight:1 }}>×</button>
+
+            {forgotState === 'sent' ? (
+              <div style={{ textAlign:'center', padding:'8px 0' }}>
+                <div style={{ fontSize:44, marginBottom:16 }}>📧</div>
+                <h3 style={{ fontFamily:"Inter,sans-serif", fontSize:20, fontWeight:700, color:'#1F2937', marginBottom:10 }}>Check your inbox</h3>
+                <p style={{ fontSize:14, color:'#6B7280', lineHeight:1.7, fontFamily:"Inter,sans-serif", marginBottom:24 }}>{forgotMsg}</p>
+                <p style={{ fontSize:12.5, color:'#9CA3AF', fontFamily:"Inter,sans-serif", marginBottom:20 }}>Didn't receive it? Check spam or try again.</p>
+                <button onClick={() => setForgotState('idle')} style={{ background:'none', border:'1px solid #e5e7eb', borderRadius:8, padding:'9px 20px', cursor:'pointer', fontSize:14, color:'#374151', fontFamily:"Inter,sans-serif", fontWeight:500, marginRight:8 }}>Try again</button>
+                <button onClick={() => setShowForgot(false)} style={{ background:'#3B82F6', border:'none', borderRadius:8, padding:'9px 20px', cursor:'pointer', fontSize:14, color:'#fff', fontFamily:"Inter,sans-serif", fontWeight:600 }}>Done</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom:24 }}>
+                  <h3 style={{ fontFamily:"Inter,sans-serif", fontSize:20, fontWeight:700, color:'#1F2937', marginBottom:8 }}>Reset your password</h3>
+                  <p style={{ fontSize:14, color:'#6B7280', lineHeight:1.6, fontFamily:"Inter,sans-serif" }}>Enter the email address linked to your account and we'll send you a reset link.</p>
+                </div>
+
+                {forgotState === 'error' && (
+                  <div style={{ background:'rgba(220,38,38,0.08)', border:'1px solid rgba(220,38,38,0.25)', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:13, color:'#dc2626', fontFamily:"Inter,sans-serif" }}>
+                    {forgotMsg}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Email Address</label>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={e => setForgotEmail(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleForgotPassword()}
+                    placeholder="Enter your email"
+                    autoFocus
+                    style={{ fontSize:15 }}
+                  />
+                </div>
+
+                <button
+                  onClick={handleForgotPassword}
+                  disabled={forgotState === 'loading'}
+                  style={{ width:'100%', padding:'13px', borderRadius:10, border:'none', background:'#3B82F6', color:'#fff', fontSize:15, fontWeight:600, cursor:'pointer', fontFamily:"Inter,sans-serif", display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity: forgotState==='loading' ? 0.7 : 1, transition:'opacity 0.15s' }}>
+                  {forgotState === 'loading' ? <><Spinner size={15} color="white" /> Sending…</> : 'Send Reset Link'}
+                </button>
+
+                <p style={{ textAlign:'center', marginTop:16, fontSize:13, color:'#9CA3AF', fontFamily:"Inter,sans-serif" }}>
+                  Remember your password?{' '}
+                  <button onClick={() => setShowForgot(false)} style={{ background:'none', border:'none', color:'#3B82F6', fontWeight:600, cursor:'pointer', fontSize:13, fontFamily:"Inter,sans-serif" }}>Sign in</button>
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

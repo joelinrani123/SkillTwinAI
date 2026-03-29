@@ -1,27 +1,31 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import React from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PageLoader }            from './components/UI';
 import Sidebar   from './components/Sidebar';
 import Topbar    from './components/Topbar';
 
-import HomePage          from './pages/HomePage';
-import LoginPage         from './pages/LoginPage';
-import DashboardPage     from './pages/DashboardPage';
-import SkillsPage        from './pages/SkillsPage';
-import TestsPage         from './pages/TestsPage';
-import CertsPage         from './pages/CertsPage';
-import JobBoardPage      from './pages/JobBoardPage';
-import AnalysisPage      from './pages/AnalysisPage';
-import LearningPage      from './pages/LearningPage';
-import ProfilePage       from './pages/ProfilePage';
-import ProjectsPage      from './pages/ProjectsPage';
-import RecruiterPage     from './pages/RecruiterPage';
-import AdminPage         from './pages/AdminPage';
-import InboxPage         from './pages/InboxPage';
-import CareerGoalsPage   from './pages/CareerGoalsPage';
-import InterviewsPage    from './pages/InterviewsPage';
-import { api }           from './services/api';
+// Lazy-load all pages — each page only downloads when first visited
+const HomePage            = lazy(() => import('./pages/HomePage'));
+const LoginPage           = lazy(() => import('./pages/LoginPage'));
+const DashboardPage       = lazy(() => import('./pages/DashboardPage'));
+const SkillsPage          = lazy(() => import('./pages/SkillsPage'));
+const TestsPage           = lazy(() => import('./pages/TestsPage'));
+const CertsPage           = lazy(() => import('./pages/CertsPage'));
+const JobBoardPage        = lazy(() => import('./pages/JobBoardPage'));
+const AnalysisPage        = lazy(() => import('./pages/AnalysisPage'));
+const LearningPage        = lazy(() => import('./pages/LearningPage'));
+const ProfilePage         = lazy(() => import('./pages/ProfilePage'));
+const ProjectsPage        = lazy(() => import('./pages/ProjectsPage'));
+const RecruiterPage       = lazy(() => import('./pages/RecruiterPage'));
+const AdminPage           = lazy(() => import('./pages/AdminPage'));
+const InboxPage           = lazy(() => import('./pages/InboxPage'));
+const CareerGoalsPage     = lazy(() => import('./pages/CareerGoalsPage'));
+const InterviewsPage      = lazy(() => import('./pages/InterviewsPage'));
+const PortfolioShowcasePage = lazy(() => import('./pages/PortfolioShowcasePage'));
+const ResumeBuilderPage   = lazy(() => import('./pages/ResumeBuilderPage'));
+
+import { api } from './services/api';
 
 const PAGE_META = {
   dashboard:               ['Dashboard',           'Real-time skill profile overview'],
@@ -143,8 +147,16 @@ function AppShell() {
   if (booting) return <PageLoader />;
 
   if (!auth) {
-    if (activePage === 'login') return <LoginPage onLogin={handleLogin} onBack={() => setPage('home')} />;
-    return <HomePage onGetStarted={() => setPage('login')} />;
+    if (activePage === 'login') return (
+      <Suspense fallback={<PageLoader />}>
+        <LoginPage onLogin={handleLogin} onBack={() => setPage('home')} />
+      </Suspense>
+    );
+    return (
+      <Suspense fallback={<PageLoader />}>
+        <HomePage onGetStarted={() => setPage('login')} />
+      </Suspense>
+    );
   }
 
   const renderPage = () => {
@@ -202,7 +214,9 @@ function AppShell() {
         )}
         <main>
           <div className="app-content">
-            {renderPage()}
+            <Suspense fallback={<PageLoader />}>
+              {renderPage()}
+            </Suspense>
           </div>
         </main>
       </div>

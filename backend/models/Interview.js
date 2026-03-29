@@ -10,6 +10,7 @@ const InterviewSchema = new mongoose.Schema({
   date:          { type: String, required: true },  // YYYY-MM-DD
   time:          { type: String, required: true },  // HH:MM
   type:          { type: String, default: 'Video Call', enum: ['Video Call', 'Phone Call', 'In-Person', 'Technical', 'HR Round'] },
+  interviewLink: { type: String, default: '' },
   notes:         { type: String, default: '' },
   status:        { type: String, default: 'scheduled', enum: ['scheduled', 'completed', 'cancelled', 'rescheduled'] },
   notified:      { type: Boolean, default: false },

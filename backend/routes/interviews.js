@@ -31,7 +31,7 @@ router.get('/my', auth, async (req, res) => {
 // Recruiter: schedule a new interview
 router.post('/', auth, requireRole('recruiter', 'admin'), async (req, res) => {
   try {
-    const { candidateId, candidateName, jobTitle, date, time, type, notes, company } = req.body;
+    const { candidateId, candidateName, jobTitle, date, time, type, notes, company, interviewLink } = req.body;
     if (!candidateId || !date || !time) {
       return res.status(400).json({ message: 'candidateId, date and time are required' });
     }
@@ -50,6 +50,7 @@ router.post('/', auth, requireRole('recruiter', 'admin'), async (req, res) => {
       date,
       time,
       type:          type || 'Video Call',
+      interviewLink: interviewLink || '',
       notes:         notes || '',
       status:        'scheduled',
     });
@@ -63,10 +64,10 @@ router.post('/', auth, requireRole('recruiter', 'admin'), async (req, res) => {
 // Recruiter: update interview status
 router.put('/:id', auth, requireRole('recruiter', 'admin'), async (req, res) => {
   try {
-    const { status, notes, date, time, type } = req.body;
+    const { status, notes, date, time, type, interviewLink } = req.body;
     const interview = await Interview.findOneAndUpdate(
       { _id: req.params.id, recruiterId: req.user._id },
-      { $set: { ...(status && { status }), ...(notes !== undefined && { notes }), ...(date && { date }), ...(time && { time }), ...(type && { type }) } },
+      { $set: { ...(status && { status }), ...(notes !== undefined && { notes }), ...(date && { date }), ...(time && { time }), ...(type && { type }), ...(interviewLink !== undefined && { interviewLink }) } },
       { new: true }
     );
     if (!interview) return res.status(404).json({ message: 'Interview not found' });

@@ -167,6 +167,19 @@ export default function InterviewsPage({ user }) {
                       </div>
                     )}
 
+                    {iv.interviewLink && (
+                      <div style={{ marginTop:10 }}>
+                        <a href={iv.interviewLink} target="_blank" rel="noreferrer"
+                          style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'10px 18px', borderRadius:8,
+                            background:'#3B82F6', color:'#fff', textDecoration:'none', fontSize:14, fontWeight:600 }}>
+                          🔗 Join Interview
+                        </a>
+                        <div style={{ fontSize:12, color:'var(--ink-3)', marginTop:6 }}>
+                          Link: <span style={{ wordBreak:'break-all' }}>{iv.interviewLink}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {isUpcoming && (
                       <div style={{ marginTop:12, padding:'10px 14px', background:'rgba(22,163,74,0.07)', borderRadius:8, border:'1px solid rgba(22,163,74,0.2)', fontSize:13, color:'#15803d', lineHeight:1.6 }}>
                         💡 <strong>Tip:</strong> Review your skills and practice relevant assessments before the interview. Check the <strong>Learning</strong> and <strong>Tests</strong> sections to prepare.

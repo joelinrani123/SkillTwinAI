@@ -1033,7 +1033,7 @@ function InterviewScheduler({ user, shortlisted }) {
   const [saving,     setSaving]     = useState(false);
   const [filter,     setFilter]     = useState('all');
   const [candidates, setCandidates] = useState([]);
-  const [form, setForm] = useState({ candidateId:'', candidateName:'', jobTitle:'', type:INTERVIEW_TYPES[0], date:'', time:'', notes:'' });
+  const [form, setForm] = useState({ candidateId:'', candidateName:'', jobTitle:'', type:INTERVIEW_TYPES[0], date:'', time:'', notes:'', interviewLink:'' });
   const todayStr = new Date().toISOString().split('T')[0];
 
   const load = async () => {
@@ -1063,11 +1063,12 @@ function InterviewScheduler({ user, shortlisted }) {
         date:          form.date,
         time:          form.time,
         notes:         form.notes,
+        interviewLink: form.interviewLink,
         company:       user?.company || user?.name || '',
       });
       setInterviews(prev => [...prev, d.interview]);
       setShowAdd(false);
-      setForm({ candidateId:'', candidateName:'', jobTitle:'', type:INTERVIEW_TYPES[0], date:'', time:'', notes:'' });
+      setForm({ candidateId:'', candidateName:'', jobTitle:'', type:INTERVIEW_TYPES[0], date:'', time:'', notes:'', interviewLink:'' });
     } catch (e) { alert(e.message || 'Failed to schedule interview'); }
     setSaving(false);
   };
@@ -1139,7 +1140,16 @@ function InterviewScheduler({ user, shortlisted }) {
                     <span>📅 {new Date(iv.date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</span>
                     <span>🕐 {iv.time}</span>
                   </div>
-                  {iv.notes && <div style={{ fontSize:12, color:'var(--ink-3)', marginTop:6 }}>Note: {iv.notes}</div>}
+                  {iv.interviewLink && (
+                    <div style={{ marginTop:6 }}>
+                      <a href={iv.interviewLink} target="_blank" rel="noreferrer"
+                        style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:13, color:'#3B82F6', textDecoration:'none', fontWeight:500,
+                          padding:'4px 12px', borderRadius:6, background:'rgba(59,130,246,0.08)', border:'1px solid rgba(59,130,246,0.2)' }}>
+                        🔗 Join Interview
+                      </a>
+                    </div>
+                  )}
+                  {iv.notes && <div style={{ fontSize:12, color:'var(--ink-3)', marginTop:6 }}>📝 {iv.notes}</div>}
                 </div>
                 <div style={{ display:'flex', gap:6, flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
                   {iv.status==='scheduled' && <>
@@ -1185,6 +1195,16 @@ function InterviewScheduler({ user, shortlisted }) {
                 <div className="form-group"><label className="form-label">Time *</label><input type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))} /></div>
               </div>
               <div className="form-group"><label className="form-label">Notes (optional)</label><textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder="Any prep notes or agenda items..." /></div>
+              <div className="form-group">
+                <label className="form-label">Interview Link (optional)</label>
+                <input
+                  type="url"
+                  value={form.interviewLink}
+                  onChange={e=>setForm(f=>({...f,interviewLink:e.target.value}))}
+                  placeholder="e.g. https://meet.google.com/abc-xyz or Zoom link"
+                />
+                <div style={{ fontSize:12, color:'var(--ink-4)', marginTop:4 }}>Paste your Google Meet, Zoom, or Teams link here. The candidate will see this in their portal.</div>
+              </div>
               <p style={{ fontSize:12, color:'var(--ink-3)', marginBottom:16 }}>
                 📧 The candidate will be notified about this interview in their portal.
               </p>
