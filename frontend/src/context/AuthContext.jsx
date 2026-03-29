@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useUser, useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { api, saveToken, clearToken } from '../services/api';
+import { pendingSignupRole } from '../pages/LoginPage';
 
 const AuthContext = createContext(null);
 
@@ -45,9 +46,10 @@ export function AuthProvider({ children }) {
           backendUser = loginRes.user;
           if (loginRes.token) saveToken(loginRes.token);
         } catch {
-          // User not in DB yet — sign them up
+          // User not in DB yet — sign them up with the role they chose on the login page
           try {
-            const signupRes = await api.auth.signup(name, email, 'candidate');
+            const chosenRole = pendingSignupRole || 'candidate';
+            const signupRes = await api.auth.signup(name, email, chosenRole);
             backendUser = signupRes.user;
             if (signupRes.token) saveToken(signupRes.token);
           } catch (err) {

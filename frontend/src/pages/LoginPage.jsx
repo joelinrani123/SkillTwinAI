@@ -7,20 +7,28 @@ const TESTIMONIALS = [
   { quote: "The AI coaching feature is like having a career advisor 24/7. I doubled my assessment scores in a month.", name: "Arjun K.", role: "Full Stack Developer" },
 ];
 
+// Store the selected role globally so AuthContext can read it during signup
+export let pendingSignupRole = 'candidate';
+export function setPendingSignupRole(r) { pendingSignupRole = r; }
+
 export default function LoginPage({ onLogin, onBack }) {
-  const [mode, setMode] = useState('login');
-  const [tIdx, setTIdx] = useState(0);
+  const [mode,        setMode]        = useState('login');
+  const [selectedRole, setSelectedRole] = useState('candidate');
+  const [tIdx,        setTIdx]        = useState(0);
   const { isSignedIn, user: clerkUser } = useUser();
   const t = TESTIMONIALS[tIdx];
 
-  // When Clerk completes sign-in, trigger onLogin so App.jsx navigates to dashboard
+  // Keep the global in sync so AuthContext picks it up
+  useEffect(() => {
+    setPendingSignupRole(selectedRole);
+  }, [selectedRole]);
+
   useEffect(() => {
     if (isSignedIn && clerkUser) {
-      // onLogin with null token — AuthContext will handle the real token sync
       onLogin(null, {
         name:  clerkUser.fullName || clerkUser.firstName || 'User',
         email: clerkUser.primaryEmailAddress?.emailAddress || '',
-        role:  clerkUser.publicMetadata?.role || 'candidate',
+        role:  clerkUser.publicMetadata?.role || selectedRole,
       });
     }
   }, [isSignedIn, clerkUser]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -87,11 +95,11 @@ export default function LoginPage({ onLogin, onBack }) {
         </div>
       </div>
 
-      {/* Right Clerk panel */}
+      {/* Right panel */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', overflowY: 'auto' }}>
 
-        {/* Tab switcher */}
-        <div style={{ width: '100%', maxWidth: 440, marginBottom: 28 }}>
+        {/* Sign In / Create Account tabs */}
+        <div style={{ width: '100%', maxWidth: 440, marginBottom: 20 }}>
           <div style={{ display: 'flex', background: '#e8ebf0', borderRadius: 10, padding: 4, border: '1px solid #dde1e8' }}>
             {['login', 'signup'].map(m => (
               <button key={m} onClick={() => setMode(m)}
@@ -101,6 +109,43 @@ export default function LoginPage({ onLogin, onBack }) {
             ))}
           </div>
         </div>
+
+        {/* ── Role selector — only shown on signup ── */}
+        {mode === 'signup' && (
+          <div style={{ width: '100%', maxWidth: 440, marginBottom: 16 }}>
+            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              I am joining as a…
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {[
+                { value: 'candidate', label: '🎓 Candidate', desc: 'Find jobs & grow skills' },
+                { value: 'recruiter', label: '🏢 Recruiter', desc: 'Hire top talent' },
+              ].map(opt => {
+                const active = selectedRole === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setSelectedRole(opt.value)}
+                    style={{
+                      flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                      fontFamily: 'Inter,sans-serif', textAlign: 'left', transition: 'all 0.15s',
+                      border: active ? '2px solid #3B82F6' : '2px solid #E5E7EB',
+                      background: active ? '#EFF6FF' : '#fff',
+                      boxShadow: active ? '0 0 0 3px rgba(59,130,246,0.10)' : 'none',
+                    }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 600, color: active ? '#1d4ed8' : '#1F2937', marginBottom: 2 }}>
+                      {opt.label}
+                    </div>
+                    <div style={{ fontSize: 12, color: active ? '#3B82F6' : '#6B7280' }}>
+                      {opt.desc}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Clerk component */}
         <div style={{ width: '100%', maxWidth: 440 }}>
@@ -124,7 +169,7 @@ export default function LoginPage({ onLogin, onBack }) {
                 elements: {
                   rootBox: { width: '100%' },
                   card: { boxShadow: '0 4px 24px rgba(0,0,0,0.08)', borderRadius: 14, border: '1px solid #e5e7eb' },
-                  formButtonPrimary: { backgroundColor: '#3B82F6', borderRadius: 9 },
+                  formButtonPrimary: { backgroundColor: selectedRole === 'recruiter' ? '#7C3AED' : '#3B82F6', borderRadius: 9 },
                   footerActionLink: { color: '#3B82F6' },
                 },
               }}
