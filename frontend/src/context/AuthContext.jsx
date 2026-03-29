@@ -35,25 +35,26 @@ export function AuthProvider({ children }) {
         if (!clerkToken) throw new Error('No Clerk token');
         saveToken(clerkToken);
 
-        const email = clerkUser.primaryEmailAddress?.emailAddress || '';
-        const name  = clerkUser.fullName || clerkUser.firstName || 'User';
+        const email      = clerkUser.primaryEmailAddress?.emailAddress || '';
+        const name       = clerkUser.fullName || clerkUser.firstName || 'User';
+        const chosenRole = pendingSignupRole || 'candidate';
 
         let backendUser = null;
 
-        // Try login first (existing user)
+        // Always call signup — backend handles both new and existing users
+        // and will update the role if a different one was selected
         try {
-          const loginRes = await api.auth.login(email);
-          backendUser = loginRes.user;
-          if (loginRes.token) saveToken(loginRes.token);
+          const signupRes = await api.auth.signup(name, email, chosenRole);
+          backendUser = signupRes.user;
+          if (signupRes.token) saveToken(signupRes.token);
         } catch {
-          // User not in DB yet — sign them up with the role they chose on the login page
+          // Fallback to login if signup fails for any reason
           try {
-            const chosenRole = pendingSignupRole || 'candidate';
-            const signupRes = await api.auth.signup(name, email, chosenRole);
-            backendUser = signupRes.user;
-            if (signupRes.token) saveToken(signupRes.token);
+            const loginRes = await api.auth.login(email);
+            backendUser = loginRes.user;
+            if (loginRes.token) saveToken(loginRes.token);
           } catch (err) {
-            console.error('[AuthContext] signup error', err);
+            console.error('[AuthContext] login error', err);
           }
         }
 
@@ -62,14 +63,12 @@ export function AuthProvider({ children }) {
           setUser({ ...backendUser, role });
           setAuth({ role });
         } else {
-          // Fallback to Clerk data so screen is never blank
           const role = normaliseRole(clerkUser.publicMetadata?.role);
           setUser({ _id: clerkUser.id, name, email, role });
           setAuth({ role });
         }
       } catch (err) {
         console.error('[AuthContext] sync error', err);
-        // Never leave a blank screen — fall back to Clerk data
         const role  = normaliseRole(clerkUser.publicMetadata?.role);
         const name  = clerkUser.fullName || clerkUser.firstName || 'User';
         const email = clerkUser.primaryEmailAddress?.emailAddress || '';

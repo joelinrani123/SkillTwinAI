@@ -19,17 +19,21 @@ router.post('/signup', async (req, res) => {
     if (!name?.trim()) return res.status(400).json({ message: 'Full name is required.' });
     if (!email)        return res.status(400).json({ message: 'Email is required.' });
 
-    // Check if user already exists
-    let user = await User.findOne({ email: email.toLowerCase() });
-    if (user) {
-      // Already exists — just return a token (idempotent signup)
-      const token = signToken(user._id);
-      return res.status(200).json({ token, user: user.toPublicProfile() });
-    }
-
     const roleMap      = { candidate: 'user', user: 'user', recruiter: 'recruiter' };
     const allowedRoles = ['user', 'recruiter', 'candidate'];
     const resolvedRole = allowedRoles.includes(role) ? (roleMap[role] || role) : 'user';
+
+    // Check if user already exists
+    let user = await User.findOne({ email: email.toLowerCase() });
+    if (user) {
+      // ✅ FIX: update the role if they picked a different one this time
+      if (resolvedRole && user.role !== resolvedRole) {
+        user.role = resolvedRole;
+        await user.save({ validateBeforeSave: false });
+      }
+      const token = signToken(user._id);
+      return res.status(200).json({ token, user: user.toPublicProfile() });
+    }
 
     user = await User.create({
       name:     name.trim(),
