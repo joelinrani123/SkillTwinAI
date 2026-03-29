@@ -15,13 +15,21 @@ async function req(path, opts = {}) {
 
 export const api = {
   auth: {
-    login:              (email, password)                             => req('/auth/login',               { method: 'POST', body: JSON.stringify({ email, password }) }),
-    signup:             (name, email, password, role, sq, sa)        => req('/auth/signup',              { method: 'POST', body: JSON.stringify({ name, email, password, role, securityQuestion: sq, securityAnswer: sa }) }),
-    me:                 ()                                           => req('/auth/me'),
-    getSecurityQuestions: ()                                         => req('/auth/security-questions'),
-    resetVerifyEmail:   (email)                                      => req('/auth/reset/verify-email',  { method: 'POST', body: JSON.stringify({ email }) }),
-    resetVerifyAnswer:  (email, answer)                              => req('/auth/reset/verify-answer', { method: 'POST', body: JSON.stringify({ email, answer }) }),
-    resetSetPassword:   (resetToken, password)                       => req('/auth/reset/set-password',  { method: 'POST', body: JSON.stringify({ resetToken, password }) }),
+    /**
+     * Call once after Clerk sign-up to register the user in your MongoDB.
+     * Pass the Clerk session token as the Authorization header via saveToken() first.
+     */
+    signup: (name, email, role) =>
+      req('/auth/signup', { method: 'POST', body: JSON.stringify({ name, email, role }) }),
+
+    /**
+     * Call after every Clerk sign-in to exchange the Clerk JWT for a backend JWT.
+     * Pass the Clerk session token via saveToken() first.
+     */
+    login: (email) =>
+      req('/auth/login', { method: 'POST', body: JSON.stringify({ email }) }),
+
+    me: () => req('/auth/me'),
   },
   users: {
     getProfile:      ()     => req('/users/profile'),

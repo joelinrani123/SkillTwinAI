@@ -18,8 +18,8 @@ const ProjectSchema = new mongoose.Schema({
   name:        { type: String, required: true },
   description: { type: String, default: '' },
   tech:        [String],
-  url:         { type: String, default: '' },   
-  link:        { type: String, default: '' },   
+  url:         { type: String, default: '' },
+  link:        { type: String, default: '' },
 }, { _id: true, timestamps: true });
 
 const TestResultSchema = new mongoose.Schema({
@@ -56,9 +56,15 @@ const MLPredictionSchema = new mongoose.Schema({
 }, { _id: false });
 
 const UserSchema = new mongoose.Schema({
+  // Clerk integration — stores the Clerk userId for fast lookup
+  clerkId:  { type: String, default: '', index: true },
+
   name:     { type: String, required: true, trim: true },
   email:    { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password: { type: String, required: true, minlength: 8 },
+  // Password is now managed by Clerk. This field is kept for backwards
+  // compatibility with existing records and for the pre-save hash hook,
+  // but new Clerk-based users store a placeholder value.
+  password: { type: String, default: 'clerk-managed', minlength: 8 },
   role:     { type: String, enum: ['user', 'recruiter', 'admin'], default: 'user' },
 
   title:    { type: String, default: '' },
@@ -80,15 +86,9 @@ const UserSchema = new mongoose.Schema({
 
   mlPrediction: MLPredictionSchema,
 
-  avatar:      { type: String, default: '' },  
+  avatar:      { type: String, default: '' },
   lastActive:  { type: Date, default: Date.now },
   aiChatCount: { type: Number, default: 0 },
-
-  passwordResetToken:   { type: String, default: '' },
-  passwordResetExpires: { type: Date },
-
-  securityQuestion: { type: String, default: '' },
-  securityAnswer:   { type: String, default: '' }, // stored as bcrypt hash
 
   shortlistedCandidates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
@@ -97,21 +97,21 @@ UserSchema.index({ email: 1 });
 UserSchema.index({ role: 1 });
 UserSchema.index({ overallScore: -1 });
 
-//pre-save password hash
+// Only hash password when it is actually changed to a real value
 UserSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
+  if (this.password === 'clerk-managed') return next(); // skip hashing for Clerk users
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
 
-//recompute score
+// Recompute overall score when relevant fields change
 UserSchema.pre('save', function (next) {
   if (this.isModified('skills') || this.isModified('testResults') || this.isModified('certifications')) {
     this.overallScore = computeOverallScore(this);
   }
   next();
 });
-
 
 function computeOverallScore(user) {
   const skills      = user.skills      || [];
@@ -135,7 +135,6 @@ function computeOverallScore(user) {
   return Math.min(Math.max(Math.round(raw), 0), 100);
 }
 
-
 UserSchema.methods.comparePassword = function (plain) {
   return bcrypt.compare(plain, this.password);
 };
@@ -145,7 +144,7 @@ UserSchema.methods.toPublicProfile = function () {
   delete obj.password;
   delete obj.__v;
   if (!obj.avatar) obj.avatar = '';
- 
+
   if (Array.isArray(obj.projects)) {
     obj.projects = obj.projects.map(p => ({
       id:          p._id ? p._id.toString() : '',
