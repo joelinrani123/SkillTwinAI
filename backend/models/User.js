@@ -84,6 +84,8 @@ const UserSchema = new mongoose.Schema({
   lastActive:  { type: Date, default: Date.now },
   aiChatCount: { type: Number, default: 0 },
 
+  passwordResetToken:   { type: String, default: '' },
+  passwordResetExpires: { type: Date },
 
   shortlistedCandidates: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
