@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useUser, useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { api, saveToken, clearToken } from '../services/api';
-import { pendingSignupRole } from '../pages/LoginPage';
 
 const AuthContext = createContext(null);
 
@@ -37,18 +36,19 @@ export function AuthProvider({ children }) {
 
         const email      = clerkUser.primaryEmailAddress?.emailAddress || '';
         const name       = clerkUser.fullName || clerkUser.firstName || 'User';
-        const chosenRole = pendingSignupRole || 'candidate';
+
+        // ✅ Read role from localStorage — set by LoginPage when user clicks a role
+        const chosenRole = localStorage.getItem('st_pending_role') || 'candidate';
 
         let backendUser = null;
 
-        // Always call signup — backend handles both new and existing users
-        // and will update the role if a different one was selected
+        // Always call signup with the chosen role
+        // Backend will update role in DB if it changed
         try {
           const signupRes = await api.auth.signup(name, email, chosenRole);
           backendUser = signupRes.user;
           if (signupRes.token) saveToken(signupRes.token);
         } catch {
-          // Fallback to login if signup fails for any reason
           try {
             const loginRes = await api.auth.login(email);
             backendUser = loginRes.user;
@@ -63,17 +63,16 @@ export function AuthProvider({ children }) {
           setUser({ ...backendUser, role });
           setAuth({ role });
         } else {
-          const role = normaliseRole(clerkUser.publicMetadata?.role);
-          setUser({ _id: clerkUser.id, name, email, role });
-          setAuth({ role });
+          setUser({ _id: clerkUser.id, name, email, role: chosenRole });
+          setAuth({ role: chosenRole });
         }
       } catch (err) {
         console.error('[AuthContext] sync error', err);
-        const role  = normaliseRole(clerkUser.publicMetadata?.role);
+        const chosenRole = localStorage.getItem('st_pending_role') || 'candidate';
         const name  = clerkUser.fullName || clerkUser.firstName || 'User';
         const email = clerkUser.primaryEmailAddress?.emailAddress || '';
-        setUser({ _id: clerkUser.id, name, email, role });
-        setAuth({ role });
+        setUser({ _id: clerkUser.id, name, email, role: chosenRole });
+        setAuth({ role: chosenRole });
       } finally {
         setBooting(false);
       }
@@ -91,6 +90,7 @@ export function AuthProvider({ children }) {
     clearToken();
     setUser(null);
     setAuth(null);
+    localStorage.removeItem('st_pending_role');
     try { await signOut(); } catch {}
   };
 

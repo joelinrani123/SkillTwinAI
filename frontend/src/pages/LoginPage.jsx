@@ -7,28 +7,30 @@ const TESTIMONIALS = [
   { quote: "The AI coaching feature is like having a career advisor 24/7. I doubled my assessment scores in a month.", name: "Arjun K.", role: "Full Stack Developer" },
 ];
 
-// Store the selected role globally so AuthContext can read it during signup
-export let pendingSignupRole = 'candidate';
-export function setPendingSignupRole(r) { pendingSignupRole = r; }
-
 export default function LoginPage({ onLogin, onBack }) {
-  const [mode,        setMode]        = useState('login');
+  const [mode,         setMode]         = useState('login');
   const [selectedRole, setSelectedRole] = useState('candidate');
-  const [tIdx,        setTIdx]        = useState(0);
+  const [tIdx,         setTIdx]         = useState(0);
   const { isSignedIn, user: clerkUser } = useUser();
   const t = TESTIMONIALS[tIdx];
 
-  // Keep the global in sync so AuthContext picks it up
+  // ✅ Write to localStorage every time role changes — reliable cross-module
+  const handleRoleSelect = (role) => {
+    setSelectedRole(role);
+    localStorage.setItem('st_pending_role', role);
+  };
+
+  // Set default on mount
   useEffect(() => {
-    setPendingSignupRole(selectedRole);
-  }, [selectedRole]);
+    localStorage.setItem('st_pending_role', 'candidate');
+  }, []);
 
   useEffect(() => {
     if (isSignedIn && clerkUser) {
       onLogin(null, {
         name:  clerkUser.fullName || clerkUser.firstName || 'User',
         email: clerkUser.primaryEmailAddress?.emailAddress || '',
-        role:  clerkUser.publicMetadata?.role || selectedRole,
+        role:  selectedRole,
       });
     }
   }, [isSignedIn, clerkUser]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -74,7 +76,6 @@ export default function LoginPage({ onLogin, onBack }) {
           </div>
         </div>
 
-        {/* Testimonial */}
         <div style={{ marginTop: 'auto', position: 'relative', zIndex: 1 }}>
           <div style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '20px 22px' }}>
             <div style={{ fontSize: 28, color: 'rgba(147,180,253,0.5)', lineHeight: 1, marginBottom: 8 }}>"</div>
@@ -98,7 +99,6 @@ export default function LoginPage({ onLogin, onBack }) {
       {/* Right panel */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', overflowY: 'auto' }}>
 
-        {/* Sign In / Create Account tabs */}
         <div style={{ width: '100%', maxWidth: 440, marginBottom: 20 }}>
           <div style={{ display: 'flex', background: '#e8ebf0', borderRadius: 10, padding: 4, border: '1px solid #dde1e8' }}>
             {['login', 'signup'].map(m => (
@@ -110,11 +110,11 @@ export default function LoginPage({ onLogin, onBack }) {
           </div>
         </div>
 
-        {/* ── Role selector — only shown on signup ── */}
+        {/* Role selector — only on signup */}
         {mode === 'signup' && (
           <div style={{ width: '100%', maxWidth: 440, marginBottom: 16 }}>
             <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-               Select your role to continue
+              I am registering as a…
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
               {[
@@ -125,7 +125,7 @@ export default function LoginPage({ onLogin, onBack }) {
                 return (
                   <button
                     key={opt.value}
-                    onClick={() => setSelectedRole(opt.value)}
+                    onClick={() => handleRoleSelect(opt.value)}
                     style={{
                       flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
                       fontFamily: 'Inter,sans-serif', textAlign: 'left', transition: 'all 0.15s',
@@ -147,7 +147,6 @@ export default function LoginPage({ onLogin, onBack }) {
           </div>
         )}
 
-        {/* Clerk component */}
         <div style={{ width: '100%', maxWidth: 440 }}>
           {mode === 'login' ? (
             <SignIn

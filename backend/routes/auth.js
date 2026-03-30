@@ -11,7 +11,6 @@ function signToken(id) {
 }
 
 // ── POST /auth/signup ────────────────────────────────────────────────────────
-// Called by AuthContext after Clerk creates the user, to register in MongoDB.
 router.post('/signup', async (req, res) => {
   try {
     const { name, email, role } = req.body;
@@ -19,22 +18,21 @@ router.post('/signup', async (req, res) => {
     if (!name?.trim()) return res.status(400).json({ message: 'Full name is required.' });
     if (!email)        return res.status(400).json({ message: 'Email is required.' });
 
-    const roleMap      = { candidate: 'user', user: 'user', recruiter: 'recruiter' };
-    const allowedRoles = ['user', 'recruiter', 'candidate'];
-    const resolvedRole = allowedRoles.includes(role) ? (roleMap[role] || role) : 'user';
+    // Map frontend role names to DB enum values
+    const roleMap      = { candidate: 'user', user: 'user', recruiter: 'recruiter', admin: 'admin' };
+    const resolvedRole = roleMap[role] || 'user';
 
-    // Check if user already exists
     let user = await User.findOne({ email: email.toLowerCase() });
     if (user) {
-      // ✅ FIX: update the role if they picked a different one this time
-      if (resolvedRole && user.role !== resolvedRole) {
-        user.role = resolvedRole;
-        await user.save({ validateBeforeSave: false });
-      }
+      // ✅ Always update the role in DB to whatever was passed
+      user.role = resolvedRole;
+      user.lastActive = new Date();
+      await user.save({ validateBeforeSave: false });
       const token = signToken(user._id);
       return res.status(200).json({ token, user: user.toPublicProfile() });
     }
 
+    // New user
     user = await User.create({
       name:     name.trim(),
       email:    email.toLowerCase(),
@@ -58,7 +56,6 @@ router.post('/signup', async (req, res) => {
 });
 
 // ── POST /auth/login ──────────────────────────────────────────────────────────
-// Called by AuthContext after Clerk signs the user in, to get a backend JWT.
 router.post('/login', async (req, res) => {
   try {
     const { email } = req.body;
@@ -96,7 +93,6 @@ router.get('/me', auth, async (req, res) => {
   }
 });
 
-// Legacy stubs so old clients don't crash
 router.post('/forgot-password', (_req, res) => res.json({ message: 'Please use Clerk password reset.' }));
 router.post('/reset-password',  (_req, res) => res.status(410).json({ message: 'Deprecated.' }));
 
