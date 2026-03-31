@@ -37,42 +37,50 @@ export function AuthProvider({ children }) {
         const email      = clerkUser.primaryEmailAddress?.emailAddress || '';
         const name       = clerkUser.fullName || clerkUser.firstName || 'User';
 
-        // ✅ Read role from localStorage — set by LoginPage when user clicks a role
+        // Read role from localStorage — set by LoginPage when user selects a role
         const chosenRole = localStorage.getItem('st_pending_role') || 'candidate';
 
         let backendUser = null;
 
-        // Always call signup with the chosen role
-        // Backend will update role in DB if it changed
+        // Always call signup — backend upserts the role if user already exists
         try {
           const signupRes = await api.auth.signup(name, email, chosenRole);
           backendUser = signupRes.user;
           if (signupRes.token) saveToken(signupRes.token);
         } catch {
+          // signup failed for a non-role reason; try login but then patch the role
           try {
             const loginRes = await api.auth.login(email);
             backendUser = loginRes.user;
             if (loginRes.token) saveToken(loginRes.token);
+            // Force-update the role in the DB by calling signup again
+            try {
+              const patchRes = await api.auth.signup(name, email, chosenRole);
+              if (patchRes.user) backendUser = patchRes.user;
+              if (patchRes.token) saveToken(patchRes.token);
+            } catch {}
           } catch (err) {
             console.error('[AuthContext] login error', err);
           }
         }
 
         if (backendUser) {
-          const role = normaliseRole(backendUser.role);
+          // Trust the chosenRole over whatever the DB returned — the DB may not have
+          // updated yet if signup returned a cached response
+          const role = normaliseRole(chosenRole || backendUser.role);
           setUser({ ...backendUser, role });
           setAuth({ role });
         } else {
-          setUser({ _id: clerkUser.id, name, email, role: chosenRole });
-          setAuth({ role: chosenRole });
+          setUser({ _id: clerkUser.id, name, email, role: normaliseRole(chosenRole) });
+          setAuth({ role: normaliseRole(chosenRole) });
         }
       } catch (err) {
         console.error('[AuthContext] sync error', err);
         const chosenRole = localStorage.getItem('st_pending_role') || 'candidate';
         const name  = clerkUser.fullName || clerkUser.firstName || 'User';
         const email = clerkUser.primaryEmailAddress?.emailAddress || '';
-        setUser({ _id: clerkUser.id, name, email, role: chosenRole });
-        setAuth({ role: chosenRole });
+        setUser({ _id: clerkUser.id, name, email, role: normaliseRole(chosenRole) });
+        setAuth({ role: normaliseRole(chosenRole) });
       } finally {
         setBooting(false);
       }

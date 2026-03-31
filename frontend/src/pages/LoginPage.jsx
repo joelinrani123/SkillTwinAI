@@ -1,5 +1,5 @@
 import { SignIn, SignUp, useUser } from '@clerk/clerk-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const TESTIMONIALS = [
   { quote: "SkillTwinAI helped me land my dream role in 3 weeks. The verified skill scores made all the difference.", name: "Priya S.", role: "Frontend Engineer" },
@@ -9,28 +9,30 @@ const TESTIMONIALS = [
 
 export default function LoginPage({ onLogin, onBack }) {
   const [mode,         setMode]         = useState('login');
-  const [selectedRole, setSelectedRole] = useState('candidate');
+  // Initialize from localStorage — so returning users already have their role pre-selected
+  const [selectedRole, setSelectedRole] = useState(
+    () => localStorage.getItem('st_pending_role') || 'candidate'
+  );
   const [tIdx,         setTIdx]         = useState(0);
   const { isSignedIn, user: clerkUser } = useUser();
+  const firedRef = useRef(false);
   const t = TESTIMONIALS[tIdx];
 
-  // ✅ Write to localStorage every time role changes — reliable cross-module
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
     localStorage.setItem('st_pending_role', role);
   };
 
-  // Set default on mount
   useEffect(() => {
-    localStorage.setItem('st_pending_role', 'candidate');
-  }, []);
-
-  useEffect(() => {
-    if (isSignedIn && clerkUser) {
+    if (isSignedIn && clerkUser && !firedRef.current) {
+      firedRef.current = true;
+      // Re-read localStorage at fire time — guarantees the latest selection is used
+      const role = localStorage.getItem('st_pending_role') || selectedRole;
+      localStorage.setItem('st_pending_role', role);
       onLogin(null, {
         name:  clerkUser.fullName || clerkUser.firstName || 'User',
         email: clerkUser.primaryEmailAddress?.emailAddress || '',
-        role:  selectedRole,
+        role,
       });
     }
   }, [isSignedIn, clerkUser]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -110,42 +112,40 @@ export default function LoginPage({ onLogin, onBack }) {
           </div>
         </div>
 
-        {/* Role selector — only on signup */}
-        {mode === 'signup' && (
-          <div style={{ width: '100%', maxWidth: 440, marginBottom: 16 }}>
-            <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              I am registering as a…
-            </p>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {[
-                { value: 'candidate', label: '🎓 Candidate', desc: 'Find jobs & grow skills' },
-                { value: 'recruiter', label: '🏢 Recruiter', desc: 'Hire top talent' },
-              ].map(opt => {
-                const active = selectedRole === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => handleRoleSelect(opt.value)}
-                    style={{
-                      flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
-                      fontFamily: 'Inter,sans-serif', textAlign: 'left', transition: 'all 0.15s',
-                      border: active ? '2px solid #3B82F6' : '2px solid #E5E7EB',
-                      background: active ? '#EFF6FF' : '#fff',
-                      boxShadow: active ? '0 0 0 3px rgba(59,130,246,0.10)' : 'none',
-                    }}
-                  >
-                    <div style={{ fontSize: 14, fontWeight: 600, color: active ? '#1d4ed8' : '#1F2937', marginBottom: 2 }}>
-                      {opt.label}
-                    </div>
-                    <div style={{ fontSize: 12, color: active ? '#3B82F6' : '#6B7280' }}>
-                      {opt.desc}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+        {/* Role selector — shown on BOTH login and signup */}
+        <div style={{ width: '100%', maxWidth: 440, marginBottom: 16 }}>
+          <p style={{ fontFamily: 'Inter,sans-serif', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            {mode === 'login' ? 'Signing in as a…' : 'I am registering as a…'}
+          </p>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[
+              { value: 'candidate', label: '🎓 Candidate', desc: 'Find jobs & grow skills' },
+              { value: 'recruiter', label: '🏢 Recruiter', desc: 'Hire top talent' },
+            ].map(opt => {
+              const active = selectedRole === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => handleRoleSelect(opt.value)}
+                  style={{
+                    flex: 1, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                    fontFamily: 'Inter,sans-serif', textAlign: 'left', transition: 'all 0.15s',
+                    border: active ? '2px solid #3B82F6' : '2px solid #E5E7EB',
+                    background: active ? '#EFF6FF' : '#fff',
+                    boxShadow: active ? '0 0 0 3px rgba(59,130,246,0.10)' : 'none',
+                  }}
+                >
+                  <div style={{ fontSize: 14, fontWeight: 600, color: active ? '#1d4ed8' : '#1F2937', marginBottom: 2 }}>
+                    {opt.label}
+                  </div>
+                  <div style={{ fontSize: 12, color: active ? '#3B82F6' : '#6B7280' }}>
+                    {opt.desc}
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        )}
+        </div>
 
         <div style={{ width: '100%', maxWidth: 440 }}>
           {mode === 'login' ? (

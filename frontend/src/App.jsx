@@ -140,7 +140,7 @@ function AppShell() {
     }
   }, []);
 
-  const handleLogin  = (token, u) => { login(token, u); };
+  const handleLogin  = (token, u) => { login(token, u); setPage(getDefaultPage(u?.role)); };
   const handleLogout = ()         => { logout(); setPage('home'); };
   const navigate     = p          => setPage(p);
 
